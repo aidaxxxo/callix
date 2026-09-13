@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard — PonsX</title>
+<link rel="stylesheet" href="style.css">
+<style>
+.dash-wrap {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 110px 24px 80px;
+}
+
+.dash-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 20px;
+  margin-bottom: 32px;
+}
+
+.dash-header h1 { font-size: 26px; font-weight: 800; letter-spacing: -0.7px; }
+.dash-header p { font-size: 13px; color: var(--text-tertiary); margin-top: 6px; }
+
+.wallet-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-radius: 100px;
+}
+
+.wallet-chip .live-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--accent-green);
+  box-shadow: 0 0 8px var(--accent-green);
+}
+
+.wallet-chip .addr { font-family: 'Space Grotesk', monospace; font-size: 12.5px; }
+.wallet-chip button {
+  background: none; border: none; color: var(--text-tertiary);
+  cursor: pointer; font-size: 12px; margin-left: 6px; font-family: inherit;
+  text-decoration: underline;
+}
+
+.gate {
+  max-width: 420px;
+  margin: 140px auto;
+  text-align: center;
+  padding: 44px 34px;
+}
+
+.gate .g-icon { font-size: 30px; margin-bottom: 16px; }
+.gate h2 { font-size: 19px; font-weight: 800; margin-bottom: 10px; }
+.gate p { font-size: 13px; color: var(--text-secondary); margin-bottom: 26px; line-height: 1.6; }
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+  margin-bottom: 32px;
+}
+
+.stat-card { padding: 26px; }
+.stat-card .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-tertiary); margin-bottom: 10px; }
+.stat-card .val { font-size: 28px; font-weight: 800; letter-spacing: -1px; }
+.stat-card .val .unit { font-size: 15px; color: var(--text-tertiary); font-weight: 600; margin-left: 4px; }
+.stat-card .sub { font-size: 11.5px; color: var(--accent-green); margin-top: 8px; font-weight: 600; }
+
+.panel { padding: 28px; margin-bottom: 20px; }
+.panel-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+.panel-head h3 { font-size: 15px; font-weight: 700; }
+.panel-head .tag { font-size: 11px; color: var(--text-tertiary); }
+
+.token-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 13px 0;
+  border-bottom: 1px solid var(--border-glass);
+}
+
+.token-row:last-child { border: none; }
+
+.token-left { display: flex; align-items: center; gap: 12px; }
+.token-dot {
+  width: 34px; height: 34px; border-radius: 10px;
+  background: linear-gradient(135deg, rgba(34,230,255,0.25), rgba(233,63,224,0.25));
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700;
+}
+.token-mint { font-family: 'Space Grotesk', monospace; font-size: 12.5px; }
+.token-mint .full { font-size: 10.5px; color: var(--text-tertiary); margin-top: 2px; }
+.token-amount { font-size: 13.5px; font-weight: 700; }
+
+.empty-state {
+  text-align: center;
+  padding: 30px 10px;
+  color: var(--text-tertiary);
+  font-size: 13px;
+}
+
+.loading-row { display: flex; align-items: center; gap: 10px; color: var(--text-tertiary); font-size: 13px; padding: 20px 0; }
+.mini-spinner {
+  width: 16px; height: 16px; border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.15); border-top-color: var(--accent-cyan);
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.overview-canvas-wrap { height: 220px; position: relative; }
+
+@media (max-width: 900px) {
+  .stat-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<div class="glow-field">
+  <div class="blob blob-1"></div>
+  <div class="blob blob-2"></div>
+  <div class="blob blob-3"></div>
+</div>
+
+<nav>
+  <a href="index.html" class="logo"><span class="mark">X</span>Pons<span style="background:var(--grad-brand);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">X</span></a>
+  <ul class="nav-links"><li><a href="index.html">Home</a></li></ul>
+  <div class="wallet-chip card" id="walletChip" style="display:none">
+    <span class="live-dot"></span>
+    <span class="addr" id="navAddr">—</span>
+    <button id="navDisconnect">Disconnect</button>
+  </div>
+</nav>
+
+<!-- Gate shown if no wallet connected -->
+<div class="gate card" id="gateView" style="display:none">
+  <div class="g-icon">🔒</div>
+  <h2>Connect your wallet first</h2>
+  <p>PonsX reads your on-chain balance directly from Phantom. Connect to view your dashboard.</p>
+  <a href="connect.html" class="btn btn-brand">Connect Wallet →</a>
+</div>
+
+<!-- Main dashboard -->
+<div class="dash-wrap" id="dashView" style="display:none">
+  <div class="dash-header">
+    <div>
+      <h1>Portfolio Overview</h1>
+      <p>Live balances read directly from Solana mainnet via public RPC.</p>
+    </div>
+  </div>
+
+  <div class="stat-grid">
+    <div class="card stat-card">
+      <div class="lbl">SOL Balance</div>
+      <div class="val" id="solBalance">…<span class="unit">SOL</span></div>
+      <div class="sub" id="solUsd"></div>
+    </div>
+    <div class="card stat-card">
+      <div class="lbl">SPL Tokens Held</div>
+      <div class="val" id="tokenCount">…</div>
+      <div class="sub">Non-zero balances</div>
+    </div>
+    <div class="card stat-card">
+      <div class="lbl">Network</div>
+      <div class="val" style="font-size:20px">Mainnet Beta</div>
+      <div class="sub" style="color:var(--text-tertiary)">api.mainnet-beta.solana.com</div>
+    </div>
+  </div>
+
+  <div class="card panel">
+    <div class="panel-head">
+      <h3>SOL — 30D Trend</h3>
+      <span class="tag">Illustrative market data</span>
+    </div>
+    <div class="overview-canvas-wrap"><canvas id="trendCanvas"></canvas></div>
+  </div>
+
+  <div class="card panel">
+    <div class="panel-head">
+      <h3>Token Holdings</h3>
+      <span class="tag" id="tokenTag">Live from your wallet</span>
+    </div>
+    <div id="tokenList">
+      <div class="loading-row"><div class="mini-spinner"></div> Fetching token accounts…</div>
+    </div>
+  </div>
+</div>
+
+<script src="wallet.js"></script>
+<script>
+const gateView = document.getElementById('gateView');
+const dashView = document.getElementById('dashView');
+const walletChip = document.getElementById('walletChip');
+const navAddr = document.getElementById('navAddr');
+const navDisconnect = document.getElementById('navDisconnect');
+const solBalanceEl = document.getElementById('solBalance');
+const solUsdEl = document.getElementById('solUsd');
+const tokenCountEl = document.getElementById('tokenCount');
+const tokenListEl = document.getElementById('tokenList');
+const tokenTagEl = document.getElementById('tokenTag');
+
+function renderTokenList(tokens) {
+  if (!tokens.length) {
+    tokenListEl.innerHTML = '<div class="empty-state">No SPL tokens with a positive balance found in this wallet.</div>';
+    return;
+  }
+  tokenListEl.innerHTML = tokens.slice(0, 12).map(t => `
+    <div class="token-row">
+      <div class="token-left">
+        <div class="token-dot">${t.mint.slice(0,2).toUpperCase()}</div>
+        <div>
+          <div class="token-mint">${PonsXWallet.truncate(t.mint)}</div>
+          <div class="full">${t.mint}</div>
+        </div>
+      </div>
+      <div class="token-amount">${t.amount.toLocaleString(undefined, {maximumFractionDigits: 4})}</div>
+    </div>
+  `).join('');
+}
+
+async function loadPortfolio(pubkey) {
+  navAddr.textContent = PonsXWallet.truncate(pubkey);
+  walletChip.style.display = 'flex';
+  gateView.style.display = 'none';
+  dashView.style.display = 'block';
+
+  try {
+    const sol = await PonsXWallet.getSolBalance(pubkey);
+    solBalanceEl.innerHTML = `${sol.toLocaleString(undefined, {maximumFractionDigits: 4})}<span class="unit">SOL</span>`;
+    solUsdEl.textContent = 'Fetched live from mainnet RPC';
+  } catch (e) {
+    solBalanceEl.innerHTML = '—<span class="unit">SOL</span>';
+    solUsdEl.textContent = 'Could not reach RPC endpoint';
+  }
+
+  try {
+    const tokens = await PonsXWallet.getTokenAccounts(pubkey);
+    tokenCountEl.textContent = tokens.length;
+    tokenTagEl.textContent = 'Live from your wallet';
+    renderTokenList(tokens);
+  } catch (e) {
+    tokenCountEl.textContent = '—';
+    tokenTagEl.textContent = 'Fetch failed';
+    tokenListEl.innerHTML = '<div class="empty-state">Could not load token accounts right now.</div>';
+  }
+}
+
+function showGate() {
+  dashView.style.display = 'none';
+  walletChip.style.display = 'none';
+  gateView.style.display = 'block';
+}
+
+navDisconnect.addEventListener('click', async () => {
+  await PonsXWallet.disconnect();
+  showGate();
+});
+
+PonsXWallet.onAccountChange((pubkey) => {
+  if (pubkey) loadPortfolio(pubkey);
+  else showGate();
+});
+
+window.addEventListener('DOMContentLoaded', async () => {
+  const stored = PonsXWallet.getStoredPubkey();
+  if (stored && PonsXWallet.isInstalled()) {
+    try {
+      const pubkey = await PonsXWallet.connect({ silent: true });
+      loadPortfolio(pubkey);
+      return;
+    } catch (_) { /* fall through to gate */ }
+  }
+  showGate();
+});
+
+// ---- Illustrative trend chart (demo data, clearly labeled) ----
+(function() {
+  const canvas = document.getElementById('trendCanvas');
+  const ctx = canvas.getContext('2d');
+  const parent = canvas.parentElement;
+  function resize() { canvas.width = parent.offsetWidth; canvas.height = parent.offsetHeight || 220; }
+  resize();
+  window.addEventListener('resize', resize);
+
+  const points = [];
+  let v = 140;
+  for (let i = 0; i < 60; i++) {
+    v += (Math.random() - 0.47) * 6;
+    points.push(v);
+  }
+
+  function draw() {
+    const w = canvas.width, h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+    const min = Math.min(...points) - 5, max = Math.max(...points) + 5;
+    const mapX = (i) => (i / (points.length - 1)) * w;
+    const mapY = (val) => h - ((val - min) / (max - min)) * h;
+
+    const grad = ctx.createLinearGradient(0, 0, 0, h);
+    grad.addColorStop(0, 'rgba(34,230,255,0.18)');
+    grad.addColorStop(1, 'transparent');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.moveTo(0, h);
+    points.forEach((p, i) => ctx.lineTo(mapX(i), mapY(p)));
+    ctx.lineTo(w, h);
+    ctx.closePath();
+    ctx.fill();
+
+    const lineGrad = ctx.createLinearGradient(0, 0, w, 0);
+    lineGrad.addColorStop(0, '#22e6ff');
+    lineGrad.addColorStop(1, '#e93fe0');
+    ctx.strokeStyle = lineGrad;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    points.forEach((p, i) => { if (i === 0) ctx.moveTo(mapX(i), mapY(p)); else ctx.lineTo(mapX(i), mapY(p)); });
+    ctx.stroke();
+  }
+  draw();
+})();
+</script>
+</body>
+</html>

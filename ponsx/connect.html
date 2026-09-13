@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Connect Wallet — PonsX</title>
+<link rel="stylesheet" href="style.css">
+<style>
+.wrap {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 120px 24px 60px;
+}
+
+.connect-card {
+  width: 100%;
+  max-width: 420px;
+  padding: 40px 36px;
+  text-align: center;
+}
+
+.connect-icon {
+  width: 60px; height: 60px;
+  margin: 0 auto 22px;
+  border-radius: 16px;
+  background: var(--grad-brand);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 26px;
+}
+
+.connect-card h1 { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; margin-bottom: 8px; }
+.connect-card p.desc { font-size: 13.5px; color: var(--text-secondary); line-height: 1.65; margin-bottom: 30px; }
+
+.state { display: none; }
+.state.active { display: block; }
+
+.provider-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  border-radius: 14px;
+  border: 1px solid var(--border-glass);
+  background: var(--bg-glass);
+  cursor: pointer;
+  transition: all 0.25s;
+  font-family: inherit;
+  color: var(--text-primary);
+}
+
+.provider-btn:hover { border-color: rgba(139,92,246,0.5); background: rgba(139,92,246,0.08); }
+
+.provider-btn img, .provider-btn .ph-icon { width: 34px; height: 34px; border-radius: 9px; flex-shrink: 0; }
+
+.provider-info { text-align: left; flex: 1; }
+.provider-info .name { font-size: 14px; font-weight: 700; }
+.provider-info .sub { font-size: 11.5px; color: var(--text-tertiary); margin-top: 2px; }
+
+.spinner {
+  width: 40px; height: 40px;
+  margin: 8px auto 22px;
+  border-radius: 50%;
+  border: 3px solid rgba(139,92,246,0.18);
+  border-top-color: var(--accent-violet);
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.status-title { font-size: 15.5px; font-weight: 700; margin-bottom: 6px; }
+.status-sub { font-size: 12.5px; color: var(--text-tertiary); line-height: 1.6; }
+
+.success-icon {
+  width: 56px; height: 56px; margin: 0 auto 18px;
+  border-radius: 50%;
+  background: rgba(46,204,113,0.14);
+  border: 1px solid rgba(46,204,113,0.35);
+  color: var(--accent-green);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 24px;
+}
+
+.addr-chip {
+  display: inline-flex; align-items: center; gap: 8px;
+  margin: 18px auto 0;
+  padding: 9px 16px;
+  border-radius: 100px;
+  background: var(--bg-glass);
+  border: 1px solid var(--border-glass);
+  font-family: 'Space Grotesk', monospace;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+
+.addr-chip .live-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--accent-green);
+  box-shadow: 0 0 6px var(--accent-green);
+}
+
+.error-box {
+  background: rgba(255,84,112,0.08);
+  border: 1px solid rgba(255,84,112,0.3);
+  border-radius: 12px;
+  padding: 14px 16px;
+  font-size: 12.5px;
+  color: #ffb3c1;
+  text-align: left;
+  margin-bottom: 18px;
+  line-height: 1.6;
+}
+
+.error-box a { color: #fff; text-decoration: underline; }
+
+.note {
+  margin-top: 22px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  line-height: 1.6;
+}
+</style>
+</head>
+<body>
+
+<div class="glow-field">
+  <div class="blob blob-1"></div>
+  <div class="blob blob-2"></div>
+</div>
+
+<nav>
+  <a href="index.html" class="logo"><span class="mark">X</span>Pons<span style="background:var(--grad-brand);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">X</span></a>
+  <ul class="nav-links"><li><a href="index.html">Home</a></li></ul>
+  <a href="index.html" class="btn btn-outline">Back</a>
+</nav>
+
+<div class="wrap">
+  <div class="card connect-card">
+    <div class="connect-icon">🔐</div>
+    <h1>Connect your wallet</h1>
+    <p class="desc">PonsX only requests your public address and read-only balance data — never a signature, never a spend approval.</p>
+
+    <div id="errorSlot"></div>
+
+    <!-- Step 1: choose -->
+    <div class="state active" id="stepChoose">
+      <button class="provider-btn" id="phantomBtn">
+        <svg class="ph-icon" viewBox="0 0 128 128" fill="none">
+          <rect width="128" height="128" rx="28" fill="#AB9FF2"/>
+          <path d="M110 64.6c0 25.5-21.4 46.2-47.8 46.2-24.9 0-45.4-18.5-47.6-42.2H8c-2.4 0-4.3-2-4.3-4.4 0-2.4 1.9-4.4 4.3-4.4h6.6C16.8 35.8 37.3 17 62.2 17 88.6 17 110 37.7 110 63.2v1.4z" fill="#fff"/>
+          <path d="M95.6 64.2c0 3-2.4 5.5-5.4 5.5s-5.4-2.5-5.4-5.5 2.4-5.5 5.4-5.5 5.4 2.5 5.4 5.5zM70 64.2c0 3-2.4 5.5-5.4 5.5s-5.4-2.5-5.4-5.5 2.4-5.5 5.4-5.5 5.4 2.5 5.4 5.5z" fill="#AB9FF2"/>
+        </svg>
+        <div class="provider-info">
+          <div class="name">Phantom</div>
+          <div class="sub">Connect using the Phantom browser extension</div>
+        </div>
+        <span>→</span>
+      </button>
+      <p class="note">Don't have Phantom? <a href="https://phantom.app/download" target="_blank" rel="noopener">Install it here</a> — it's the official wallet site.</p>
+    </div>
+
+    <!-- Step 2: connecting -->
+    <div class="state" id="stepConnecting">
+      <div class="spinner"></div>
+      <p class="status-title">Waiting for approval…</p>
+      <p class="status-sub">Check the Phantom popup and approve the connection request.</p>
+    </div>
+
+    <!-- Step 3: connected -->
+    <div class="state" id="stepConnected">
+      <div class="success-icon">✓</div>
+      <p class="status-title">Wallet connected</p>
+      <p class="status-sub">You're ready to view your portfolio.</p>
+      <div class="addr-chip"><span class="live-dot"></span><span id="addrText">—</span></div>
+      <div style="margin-top:26px;display:flex;gap:10px;">
+        <button class="btn btn-outline" id="disconnectBtn" style="flex:1">Disconnect</button>
+        <a class="btn btn-brand" id="continueBtn" href="dashboard.html" style="flex:1">Open Dashboard →</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="wallet.js"></script>
+<script>
+const stepChoose = document.getElementById('stepChoose');
+const stepConnecting = document.getElementById('stepConnecting');
+const stepConnected = document.getElementById('stepConnected');
+const errorSlot = document.getElementById('errorSlot');
+const phantomBtn = document.getElementById('phantomBtn');
+const disconnectBtn = document.getElementById('disconnectBtn');
+const addrText = document.getElementById('addrText');
+
+function showState(el) {
+  [stepChoose, stepConnecting, stepConnected].forEach(s => s.classList.remove('active'));
+  el.classList.add('active');
+}
+
+function showError(html) {
+  errorSlot.innerHTML = `<div class="error-box">${html}</div>`;
+}
+
+function clearError() {
+  errorSlot.innerHTML = '';
+}
+
+function renderConnected(pubkey) {
+  addrText.textContent = PonsXWallet.truncate(pubkey);
+  showState(stepConnected);
+}
+
+async function attemptConnect(silent) {
+  try {
+    const pubkey = await PonsXWallet.connect({ silent });
+    renderConnected(pubkey);
+  } catch (err) {
+    if (!silent) {
+      showState(stepChoose);
+      if (err.message === 'PHANTOM_NOT_FOUND') {
+        showError('Phantom extension not detected. <a href="https://phantom.app/download" target="_blank" rel="noopener">Install Phantom</a> and refresh this page.');
+      } else {
+        showError('Connection request was rejected or timed out. Please try again.');
+      }
+    }
+  }
+}
+
+phantomBtn.addEventListener('click', () => {
+  clearError();
+  if (!PonsXWallet.isInstalled()) {
+    showError('Phantom extension not detected. <a href="https://phantom.app/download" target="_blank" rel="noopener">Install Phantom</a> and refresh this page.');
+    return;
+  }
+  showState(stepConnecting);
+  attemptConnect(false);
+});
+
+disconnectBtn.addEventListener('click', async () => {
+  await PonsXWallet.disconnect();
+  showState(stepChoose);
+});
+
+PonsXWallet.onAccountChange((pubkey) => {
+  if (pubkey) renderConnected(pubkey);
+  else showState(stepChoose);
+});
+
+// Try a silent reconnect if the site was already trusted by the user.
+window.addEventListener('DOMContentLoaded', () => {
+  if (PonsXWallet.isInstalled()) attemptConnect(true);
+});
+</script>
+</body>
+</html>
