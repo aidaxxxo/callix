@@ -324,6 +324,48 @@ nav {
 
 .scanner-holders .lbl2 { font-size: 10px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px; }
 
+.chain-badge {
+  display: inline-block;
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 2px 7px;
+  border-radius: 5px;
+  margin-bottom: 4px;
+}
+
+.chain-badge.solana { color: var(--accent-violet); background: rgba(139,92,246,0.14); }
+.chain-badge.robinhood { color: #2ecc71; background: rgba(46,204,113,0.14); }
+
+.scanner-ca {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 150px;
+}
+
+.scanner-ca .lbl2 { font-size: 10px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.5px; }
+
+.scanner-ca code {
+  font-family: 'Space Grotesk', monospace;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.ca-copy-btn {
+  background: var(--bg-glass);
+  border: 1px solid var(--border-glass);
+  color: var(--text-tertiary);
+  border-radius: 5px;
+  padding: 3px 7px;
+  font-size: 10px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.ca-copy-btn:hover { color: var(--text-primary); border-color: rgba(255,255,255,0.2); }
+
 .holder-chip {
   display: inline-flex;
   align-items: center;
@@ -417,10 +459,10 @@ nav {
 
   <div class="card panel">
     <div class="panel-head">
-      <h3>Token Scanner</h3>
-      <span class="tag">Trending Solana tokens · live data</span>
+      <h3>Top Wallets — Solana &amp; Robinhood Chain</h3>
+      <span class="tag">Trending tokens · live data, both chains</span>
     </div>
-    <p class="scanner-note">Top holder wallets are read live from Solana RPC — the largest current holders of each token, not a curated "smart money" score. "Buy" opens the token on Jupiter, where you execute the swap yourself; PonsX never holds or moves funds.</p>
+    <p class="scanner-note">Top holder wallets are read live on-chain — Solana via public RPC, Robinhood Chain via its Blockscout explorer API — showing each token's largest current holders, not a curated "smart money" score. The CA is the real contract/mint address; "Buy" opens the token on Jupiter (Solana) or DexScreener (Robinhood Chain) where you execute the trade yourself — PonsX never holds or moves funds.</p>
     <div id="scannerList">
       <div class="loading-row"><div class="mini-spinner"></div> Scanning trending tokens…</div>
     </div>
@@ -647,36 +689,55 @@ window.addEventListener('DOMContentLoaded', async () => {
 
 // ---- Token Scanner: real trending Solana tokens + real on-chain top holders ----
 const scannerListEl = document.getElementById('scannerList');
+const BLOCKSCOUT_API = 'https://robinhoodchain.blockscout.com/api/v2';
 
-function jupiterBuyUrl(mint) {
-  return `https://jup.ag/swap/SOL-${mint}`;
+const CHAINS = {
+  solana: { label: 'Solana', badgeClass: 'solana' },
+  robinhood: { label: 'Robinhood Chain', badgeClass: 'robinhood' }
+};
+
+function buyUrl(token) {
+  if (token.chain === 'solana') return `https://jup.ag/swap/SOL-${token.address}`;
+  return `https://dexscreener.com/robinhood/${token.pairAddress}`;
 }
 
-function solscanUrl(address) {
-  return `https://solscan.io/account/${address}`;
+function explorerAddressUrl(chain, address) {
+  return chain === 'solana'
+    ? `https://solscan.io/account/${address}`
+    : `https://robinhoodchain.blockscout.com/address/${address}`;
 }
 
-async function fetchTrendingSolanaTokens(limit = 6) {
+function explorerTokenUrl(token) {
+  return token.chain === 'solana'
+    ? `https://solscan.io/token/${token.address}`
+    : `https://robinhoodchain.blockscout.com/token/${token.address}`;
+}
+
+async function fetchTrendingTokens(limit = 4) {
   const res = await fetch('https://api.dexscreener.com/token-boosts/top/v1');
   if (!res.ok) throw new Error(`DexScreener HTTP ${res.status}`);
   const boosts = await res.json();
-  const solanaMints = (Array.isArray(boosts) ? boosts : [])
-    .filter((b) => b.chainId === 'solana')
-    .map((b) => b.tokenAddress)
-    .filter((v, i, arr) => arr.indexOf(v) === i)
-    .slice(0, limit);
+  const candidates = (Array.isArray(boosts) ? boosts : [])
+    .filter((b) => b.chainId === 'solana' || b.chainId === 'robinhood')
+    .filter((b, i, arr) => arr.findIndex((x) => x.tokenAddress === b.tokenAddress && x.chainId === b.chainId) === i);
+
+  const perChain = { solana: [], robinhood: [] };
+  candidates.forEach((c) => { if (perChain[c.chainId].length < limit) perChain[c.chainId].push(c); });
+  const picked = [...perChain.solana, ...perChain.robinhood];
 
   const tokens = [];
-  for (const mint of solanaMints) {
+  for (const c of picked) {
     try {
-      const pairRes = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${mint}`);
+      const pairRes = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${c.tokenAddress}`);
       if (!pairRes.ok) continue;
       const data = await pairRes.json();
-      const pairs = (data.pairs || []).filter((p) => p.chainId === 'solana');
+      const pairs = (data.pairs || []).filter((p) => p.chainId === c.chainId);
       if (!pairs.length) continue;
       const best = pairs.sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
       tokens.push({
-        mint,
+        chain: c.chainId,
+        address: c.tokenAddress,
+        pairAddress: best.pairAddress,
         symbol: best.baseToken?.symbol || '???',
         name: best.baseToken?.name || 'Unknown token',
         icon: best.info?.imageUrl || null,
@@ -693,57 +754,94 @@ function renderScannerRow(token) {
   const iconHtml = token.icon
     ? `<img src="${token.icon}" alt="${token.symbol}">`
     : token.symbol.slice(0, 2).toUpperCase();
+  const chainMeta = CHAINS[token.chain];
+  const rowId = `${token.chain}-${token.address}`;
+  const buyLabel = token.chain === 'solana' ? 'Buy on Jupiter →' : 'Buy on DexScreener →';
   return `
-    <div class="scanner-row" data-mint="${token.mint}">
+    <div class="scanner-row" data-row="${rowId}">
       <div class="scanner-left">
-        <div class="scanner-icon">${iconHtml}</div>
-        <div>
-          <div class="scanner-name">${token.symbol}</div>
-          <div class="scanner-sub">${token.name}</div>
+        <span class="chain-badge ${chainMeta.badgeClass}">${chainMeta.label}</span>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div class="scanner-icon">${iconHtml}</div>
+          <div>
+            <div class="scanner-name"><a href="${explorerTokenUrl(token)}" target="_blank" rel="noopener" style="text-decoration:none">${token.symbol}</a></div>
+            <div class="scanner-sub">${token.name}</div>
+          </div>
         </div>
+      </div>
+      <div class="scanner-ca">
+        <div>
+          <div class="lbl2">CA</div>
+          <code>${PonsXWallet.truncate(token.address)}</code>
+        </div>
+        <button class="ca-copy-btn" data-copy="${token.address}">Copy</button>
       </div>
       <div class="scanner-price">
         <div class="p">$${token.priceUsd < 0.01 ? token.priceUsd.toExponential(2) : token.priceUsd.toLocaleString(undefined, {maximumFractionDigits: 4})}</div>
         <div class="chg ${up ? 'up' : 'down'}">${token.change24h == null ? '—' : (up ? '+' : '') + token.change24h.toFixed(1) + '%'}</div>
       </div>
-      <div class="scanner-holders" data-holders="${token.mint}">
-        <div class="lbl2">Top Holders</div>
+      <div class="scanner-holders" data-holders="${rowId}">
+        <div class="lbl2">Top Wallets Holding</div>
         <div class="loading-row" style="padding:0"><div class="mini-spinner"></div></div>
       </div>
-      <a class="btn btn-brand buy-btn" href="${jupiterBuyUrl(token.mint)}" target="_blank" rel="noopener">Buy on Jupiter →</a>
+      <a class="btn btn-brand buy-btn" href="${buyUrl(token)}" target="_blank" rel="noopener">${buyLabel}</a>
     </div>
   `;
 }
 
-async function loadHoldersFor(mint) {
-  const slot = document.querySelector(`[data-holders="${mint}"]`);
+async function getRobinhoodTopHolders(tokenAddress, limit = 3) {
+  const res = await fetch(`${BLOCKSCOUT_API}/tokens/${tokenAddress}/holders`);
+  if (!res.ok) throw new Error(`Blockscout HTTP ${res.status}`);
+  const data = await res.json();
+  return (data.items || []).slice(0, limit).map((it) => {
+    const decimals = Number(it.token?.decimals || 0);
+    const raw = Number(it.value || 0);
+    return { owner: it.address?.hash, amount: decimals ? raw / Math.pow(10, decimals) : raw };
+  }).filter((h) => h.owner);
+}
+
+async function loadHoldersFor(token) {
+  const rowId = `${token.chain}-${token.address}`;
+  const slot = document.querySelector(`[data-holders="${rowId}"]`);
   if (!slot) return;
   try {
-    const holders = await PonsXWallet.getTopHolders(mint, 3);
+    const holders = token.chain === 'solana'
+      ? await PonsXWallet.getTopHolders(token.address, 3)
+      : await getRobinhoodTopHolders(token.address, 3);
     if (!holders.length) {
-      slot.innerHTML = '<div class="lbl2">Top Holders</div><span style="font-size:11px;color:var(--text-tertiary)">Unavailable</span>';
+      slot.innerHTML = '<div class="lbl2">Top Wallets Holding</div><span style="font-size:11px;color:var(--text-tertiary)">Unavailable</span>';
       return;
     }
-    slot.innerHTML = '<div class="lbl2">Top Holders</div>' + holders.map((h) => `
-      <a class="holder-chip" href="${solscanUrl(h.owner)}" target="_blank" rel="noopener">
+    slot.innerHTML = '<div class="lbl2">Top Wallets Holding</div>' + holders.map((h) => `
+      <a class="holder-chip" href="${explorerAddressUrl(token.chain, h.owner)}" target="_blank" rel="noopener">
         ${PonsXWallet.truncate(h.owner)} <span class="pct">${h.amount ? h.amount.toLocaleString(undefined, {maximumFractionDigits: 0}) : ''}</span>
       </a>
     `).join('');
   } catch (e) {
-    console.warn(`Holder lookup failed for ${mint}:`, e.message || e);
-    slot.innerHTML = '<div class="lbl2">Top Holders</div><span style="font-size:11px;color:var(--text-tertiary)">Unavailable</span>';
+    console.warn(`Holder lookup failed for ${rowId}:`, e.message || e);
+    slot.innerHTML = '<div class="lbl2">Top Wallets Holding</div><span style="font-size:11px;color:var(--text-tertiary)">Unavailable</span>';
   }
 }
 
 async function loadTokenScanner() {
   try {
-    const tokens = await fetchTrendingSolanaTokens(6);
+    const tokens = await fetchTrendingTokens(4);
     if (!tokens.length) {
-      scannerListEl.innerHTML = '<div class="empty-state">No trending Solana tokens returned right now.</div>';
+      scannerListEl.innerHTML = '<div class="empty-state">No trending tokens returned right now.</div>';
       return;
     }
     scannerListEl.innerHTML = tokens.map(renderScannerRow).join('');
-    tokens.forEach((t) => loadHoldersFor(t.mint));
+    tokens.forEach((t) => loadHoldersFor(t));
+    scannerListEl.querySelectorAll('.ca-copy-btn').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(btn.dataset.copy);
+          const original = btn.textContent;
+          btn.textContent = 'Copied';
+          setTimeout(() => { btn.textContent = original; }, 1200);
+        } catch (_) { /* clipboard unavailable, no-op */ }
+      });
+    });
   } catch (e) {
     console.error('Token scanner failed:', e);
     scannerListEl.innerHTML = `<div class="empty-state">Could not load trending tokens: ${e.message || 'unknown error'}</div>`;
