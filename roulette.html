@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HOOD Roulette — Provably Fair</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+:root {
+  --bg-primary: #07060f;
+  --bg-secondary: #0c0a1a;
+  --bg-card: rgba(22, 18, 40, 0.65);
+  --bg-glass: rgba(255, 255, 255, 0.03);
+  --border-glass: rgba(255, 255, 255, 0.08);
+  --text-primary: #f5f3ff;
+  --text-secondary: rgba(245, 243, 255, 0.58);
+  --text-tertiary: rgba(245, 243, 255, 0.32);
+  --accent-cyan: #22e6ff;
+  --accent-magenta: #e93fe0;
+  --accent-violet: #8b5cf6;
+  --accent-green: #2ecc71;
+  --accent-red: #ff5470;
+  --accent-gold: #f7c948;
+  --grad-brand: linear-gradient(135deg, var(--accent-cyan), var(--accent-magenta));
+  --glow-cyan: 0 0 40px rgba(34, 230, 255, 0.18);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: 'Inter', -apple-system, sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+body::before {
+  content: ''; position: fixed; inset: 0; z-index: -1;
+  background:
+    radial-gradient(900px 600px at 15% -5%, rgba(34,230,255,0.10), transparent 60%),
+    radial-gradient(900px 600px at 90% 10%, rgba(233,63,224,0.10), transparent 60%);
+}
+h1, h2, h3, .brand-font { font-family: 'Space Grotesk', 'Inter', sans-serif; }
+a { color: inherit; }
+.mono { font-family: 'JetBrains Mono', monospace; }
+
+nav {
+  position: sticky; top: 0; z-index: 1000; height: 72px;
+  padding: 0 clamp(16px, 4vw, 48px);
+  display: flex; align-items: center; justify-content: space-between;
+  background: rgba(7, 6, 15, 0.75); backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border-glass);
+}
+.logo { display: flex; align-items: center; gap: 10px; font-size: 21px; font-weight: 800; letter-spacing: -0.5px; text-decoration: none; }
+.logo .mark {
+  width: 30px; height: 30px; border-radius: 9px; background: var(--grad-brand);
+  display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 800; color: #07060f;
+}
+.nav-links { display: flex; align-items: center; gap: 28px; list-style: none; }
+.nav-links a { color: var(--text-secondary); text-decoration: none; font-size: 13px; font-weight: 500; transition: color .25s; }
+.nav-links a:hover { color: var(--text-primary); }
+.balance-chip {
+  display: flex; align-items: center; gap: 8px; padding: 9px 16px; border-radius: 10px;
+  background: var(--bg-glass); border: 1px solid var(--border-glass); font-weight: 600; font-size: 14px;
+}
+.balance-chip b { color: var(--accent-gold); }
+
+.wrap { max-width: 1120px; margin: 0 auto; padding: clamp(20px,4vw,44px) clamp(16px,4vw,44px) 80px; }
+
+.hero-head { text-align: center; margin-bottom: 36px; }
+.hero-head .tag {
+  display: inline-flex; align-items:center; gap:7px; font-size: 12px; font-weight: 600; letter-spacing: .5px;
+  text-transform: uppercase; color: var(--accent-cyan); padding: 6px 14px; border-radius: 999px;
+  background: rgba(34,230,255,0.08); border: 1px solid rgba(34,230,255,0.2); margin-bottom: 16px;
+}
+.hero-head h1 { font-size: clamp(28px, 5vw, 44px); font-weight: 800; letter-spacing: -1px; }
+.hero-head h1 span { background: var(--grad-brand); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.hero-head p { color: var(--text-secondary); margin-top: 10px; max-width: 620px; margin-inline: auto; font-size: 15px; }
+
+.layout { display: grid; grid-template-columns: 380px 1fr; gap: 28px; align-items: start; }
+@media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+
+.card {
+  background: var(--bg-card); border: 1px solid var(--border-glass); border-radius: 20px;
+  padding: 26px; backdrop-filter: blur(16px);
+}
+.card h3 { font-size: 16px; margin-bottom: 4px; }
+.card .sub { color: var(--text-tertiary); font-size: 12.5px; margin-bottom: 20px; }
+
+/* Wheel */
+.wheel-stage { display: flex; flex-direction: column; align-items: center; gap: 22px; }
+.wheel-box { position: relative; width: min(340px, 82vw); aspect-ratio: 1; }
+.pointer {
+  position: absolute; top: -6px; left: 50%; transform: translateX(-50%); z-index: 5;
+  width: 0; height: 0; border-left: 15px solid transparent; border-right: 15px solid transparent;
+  border-top: 24px solid var(--accent-gold); filter: drop-shadow(0 3px 6px rgba(0,0,0,.5));
+}
+.wheel {
+  width: 100%; height: 100%; border-radius: 50%;
+  border: 8px solid #1a1530; box-shadow: 0 0 0 4px rgba(255,255,255,.04), 0 24px 60px rgba(0,0,0,.55), inset 0 0 40px rgba(0,0,0,.6);
+  transition: transform 6.2s cubic-bezier(.12,.62,.15,1);
+  will-change: transform;
+}
+.wheel-hub {
+  position: absolute; inset: 0; margin: auto; width: 30%; height: 30%; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #221b3d, #0b0918);
+  border: 3px solid rgba(255,255,255,.08); display: flex; align-items: center; justify-content: center;
+  z-index: 4; flex-direction: column; pointer-events: none;
+}
+.wheel-hub .n { font-family: 'Space Grotesk'; font-size: clamp(28px,7vw,40px); font-weight: 800; line-height: 1; }
+.wheel-hub .l { font-size: 10px; letter-spacing: 2px; color: var(--text-tertiary); text-transform: uppercase; margin-top: 4px; }
+
+.result-line { min-height: 26px; font-size: 15px; font-weight: 600; text-align: center; }
+.result-line.win { color: var(--accent-green); }
+.result-line.lose { color: var(--accent-red); }
+
+/* Bet controls */
+.field-label { font-size: 12px; color: var(--text-secondary); font-weight: 600; margin-bottom: 8px; display:block; }
+.stake-row { display: flex; gap: 8px; margin-bottom: 8px; }
+.stake-input {
+  flex: 1; background: var(--bg-glass); border: 1px solid var(--border-glass); border-radius: 10px;
+  padding: 12px 14px; color: var(--text-primary); font-size: 15px; font-weight: 600; font-family: inherit;
+}
+.stake-input:focus { outline: none; border-color: rgba(34,230,255,.4); }
+.chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 22px; }
+.chip-btn, .clear-btn {
+  padding: 8px 14px; border-radius: 999px; border: 1px solid var(--border-glass);
+  background: var(--bg-glass); color: var(--text-secondary); font-size: 12.5px; font-weight: 600;
+  cursor: pointer; transition: all .2s; font-family: inherit;
+}
+.chip-btn:hover, .clear-btn:hover { border-color: rgba(34,230,255,.4); color: var(--text-primary); }
+
+.bet-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 8px; }
+.bet {
+  position: relative; padding: 14px 12px; border-radius: 12px; border: 1.5px solid var(--border-glass);
+  background: var(--bg-glass); cursor: pointer; transition: all .2s; text-align: center;
+}
+.bet:hover { border-color: rgba(255,255,255,.25); transform: translateY(-1px); }
+.bet.active { border-color: var(--accent-cyan); box-shadow: var(--glow-cyan); background: rgba(34,230,255,.06); }
+.bet .bt { font-weight: 700; font-size: 14px; }
+.bet .bp { font-size: 11px; color: var(--text-tertiary); margin-top: 2px; }
+.bet.red .bt { color: var(--accent-red); }
+.bet.black .bt { color: #c7c2e6; }
+.bet .badge {
+  position: absolute; top: -8px; right: -8px; min-width: 22px; height: 22px; padding: 0 5px;
+  border-radius: 999px; background: var(--accent-gold); color: #07060f; font-size: 11px; font-weight: 800;
+  display: none; align-items: center; justify-content: center;
+}
+.bet.active .badge { display: flex; }
+
+.number-note { font-size: 12px; color: var(--text-secondary); margin: 16px 0 8px; }
+.num-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(38px,1fr)); gap: 6px; }
+.num {
+  aspect-ratio: 1; border-radius: 8px; border: 1px solid var(--border-glass); background: var(--bg-glass);
+  color: var(--text-secondary); font-size: 12.5px; font-weight: 700; cursor: pointer; transition: all .15s;
+  display:flex; align-items:center; justify-content:center;
+}
+.num.red { background: rgba(255,84,112,.14); color: #ff8ba0; border-color: rgba(255,84,112,.2); }
+.num.black { background: rgba(255,255,255,.03); }
+.num.green { background: rgba(46,204,113,.16); color: #62e39b; border-color: rgba(46,204,113,.25); }
+.num.active { outline: 2px solid var(--accent-cyan); outline-offset: 1px; box-shadow: var(--glow-cyan); }
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%;
+  padding: 15px 26px; border-radius: 12px; font-size: 15px; font-weight: 700; font-family: inherit;
+  cursor: pointer; border: none; transition: all .25s; margin-top: 20px;
+}
+.btn-brand { background: var(--grad-brand); color: #07060f; }
+.btn-brand:hover:not(:disabled) { transform: translateY(-1px); box-shadow: var(--glow-cyan); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+
+.summary { display: flex; justify-content: space-between; font-size: 13px; margin-top: 14px; color: var(--text-secondary); }
+.summary b { color: var(--text-primary); }
+
+/* Fairness */
+.fair-grid { display: grid; gap: 12px; }
+.fair-row { display: flex; flex-direction: column; gap: 5px; }
+.fair-row label { font-size: 11px; letter-spacing:.4px; text-transform: uppercase; color: var(--text-tertiary); font-weight: 600; }
+.fair-val {
+  font-family: 'JetBrains Mono', monospace; font-size: 11.5px; background: rgba(0,0,0,.3);
+  border: 1px solid var(--border-glass); border-radius: 8px; padding: 9px 11px; word-break: break-all; color: var(--text-secondary);
+}
+.fair-input {
+  font-family: 'JetBrains Mono', monospace; font-size: 12px; background: rgba(0,0,0,.3);
+  border: 1px solid var(--border-glass); border-radius: 8px; padding: 9px 11px; color: var(--text-primary); width: 100%;
+}
+.fair-input:focus { outline: none; border-color: rgba(34,230,255,.4); }
+.mini-btn {
+  padding: 7px 13px; border-radius: 8px; border: 1px solid var(--border-glass); background: var(--bg-glass);
+  color: var(--text-secondary); font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; transition: all .2s;
+}
+.mini-btn:hover { color: var(--text-primary); border-color: rgba(34,230,255,.4); }
+.verify-out { font-size: 12.5px; margin-top: 10px; min-height: 18px; }
+.verify-out.ok { color: var(--accent-green); }
+.verify-out.bad { color: var(--accent-red); }
+
+.history { display: flex; gap: 7px; flex-wrap: wrap; }
+.h-pill { width: 30px; height: 30px; border-radius: 8px; display:flex; align-items:center; justify-content:center; font-size: 12px; font-weight: 700; }
+.h-pill.red { background: rgba(255,84,112,.16); color: #ff8ba0; }
+.h-pill.black { background: rgba(255,255,255,.05); color: #c7c2e6; }
+.h-pill.green { background: rgba(46,204,113,.18); color: #62e39b; }
+
+details { margin-top: 14px; }
+details summary { cursor: pointer; font-size: 13px; color: var(--accent-cyan); font-weight: 600; }
+details p { font-size: 12.5px; color: var(--text-secondary); margin-top: 10px; line-height: 1.6; }
+details code { background: rgba(0,0,0,.3); padding: 2px 6px; border-radius: 5px; font-family: 'JetBrains Mono'; font-size: 11.5px; }
+
+.notice {
+  background: rgba(247,201,72,.06); border: 1px solid rgba(247,201,72,.22); border-radius: 12px;
+  padding: 14px 16px; font-size: 12.5px; color: var(--text-secondary); line-height: 1.6; margin-top: 24px;
+}
+.notice b { color: var(--accent-gold); }
+
+footer { text-align: center; padding: 40px 20px; color: var(--text-tertiary); font-size: 12.5px; border-top: 1px solid var(--border-glass); }
+.section-gap { margin-top: 28px; }
+.toast {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(80px);
+  background: #16122a; border: 1px solid var(--border-glass); padding: 12px 20px; border-radius: 12px;
+  font-size: 13px; font-weight: 600; opacity: 0; transition: all .3s; z-index: 2000; box-shadow: 0 12px 40px rgba(0,0,0,.5);
+}
+.toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="/" class="logo"><span class="mark">X</span>Pons<span style="background:var(--grad-brand);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">X</span></a>
+  <ul class="nav-links">
+    <li><a href="/">Home</a></li>
+    <li><a href="/dashboard">Dashboard</a></li>
+    <li><a href="/roulette" style="color:var(--text-primary)">Roulette</a></li>
+  </ul>
+  <div class="balance-chip">Balance:&nbsp;<b id="balance">0</b>&nbsp;$HOOD</div>
+</nav>
+
+<div class="wrap">
+  <div class="hero-head">
+    <span class="tag">● Provably Fair</span>
+    <h1><span>$HOOD</span> Roulette</h1>
+    <p>A demo European roulette (single zero) with a verifiable commit-reveal outcome. Every spin is generated before you know the result — and you can prove it wasn't rigged.</p>
+  </div>
+
+  <div class="layout">
+
+    <!-- LEFT: Wheel + fairness -->
+    <div>
+      <div class="card wheel-stage">
+        <div class="wheel-box">
+          <div class="pointer"></div>
+          <div class="wheel" id="wheel"></div>
+          <div class="wheel-hub"><div class="n" id="hubNum">—</div><div class="l">$HOOD</div></div>
+        </div>
+        <div class="result-line" id="result">Place your bets and spin.</div>
+      </div>
+
+      <div class="card section-gap">
+        <h3>Recent spins</h3>
+        <div class="sub">Newest first</div>
+        <div class="history" id="history"><span style="color:var(--text-tertiary);font-size:13px">No spins yet.</span></div>
+      </div>
+
+      <div class="card section-gap">
+        <h3>Provably fair</h3>
+        <div class="sub">Verify any spin yourself — no trust required.</div>
+        <div class="fair-grid">
+          <div class="fair-row">
+            <label>Server seed hash (commit — shown before spin)</label>
+            <div class="fair-val" id="serverHash">—</div>
+          </div>
+          <div class="fair-row">
+            <label>Your client seed (editable)</label>
+            <input class="fair-input" id="clientSeed" value="">
+          </div>
+          <div class="fair-row">
+            <label>Nonce (spin counter)</label>
+            <div class="fair-val" id="nonce">0</div>
+          </div>
+          <div class="fair-row">
+            <label>Revealed server seed (after last spin)</label>
+            <div class="fair-val" id="revealedSeed">— spin to reveal —</div>
+          </div>
+        </div>
+        <div style="display:flex; gap:8px; margin-top:14px; flex-wrap:wrap;">
+          <button class="mini-btn" id="verifyBtn">Verify last spin</button>
+          <button class="mini-btn" id="rotateBtn">New server seed</button>
+        </div>
+        <div class="verify-out" id="verifyOut"></div>
+
+        <details>
+          <summary>How it works</summary>
+          <p>
+            Before each spin we generate a random <b>server seed</b> and show you its SHA-256 hash (the commit). We can't change the seed afterwards without breaking that hash. The winning number is computed as:<br><br>
+            <code>H = HMAC-SHA256(serverSeed, clientSeed:nonce)</code><br>
+            <code>result = (first 8 hex of H, as int) mod 37</code><br><br>
+            After the spin we reveal the server seed. Hit <b>Verify</b> to confirm the hash matches and the number was derived exactly as above. You control the <b>client seed</b>, so neither side can predict or fix the outcome.
+          </p>
+        </details>
+      </div>
+    </div>
+
+    <!-- RIGHT: Betting -->
+    <div class="card">
+      <h3>Place your bet</h3>
+      <div class="sub">Single-zero European wheel · house edge 2.7%</div>
+
+      <label class="field-label">Stake per bet ($HOOD)</label>
+      <div class="stake-row">
+        <input class="stake-input mono" id="stake" type="number" min="1" value="25">
+      </div>
+      <div class="chips">
+        <button class="chip-btn" data-add="10">+10</button>
+        <button class="chip-btn" data-add="25">+25</button>
+        <button class="chip-btn" data-add="100">+100</button>
+        <button class="chip-btn" data-set="max">Max</button>
+        <button class="clear-btn" id="clearBets">Clear bets</button>
+      </div>
+
+      <div class="bet-grid" id="outsideBets">
+        <div class="bet red"   data-type="red"    data-pay="1"><div class="bt">Red</div><div class="bp">pays 1:1</div><div class="badge">0</div></div>
+        <div class="bet black" data-type="black"  data-pay="1"><div class="bt">Black</div><div class="bp">pays 1:1</div><div class="badge">0</div></div>
+        <div class="bet"       data-type="even"   data-pay="1"><div class="bt">Even</div><div class="bp">pays 1:1</div><div class="badge">0</div></div>
+        <div class="bet"       data-type="odd"    data-pay="1"><div class="bt">Odd</div><div class="bp">pays 1:1</div><div class="badge">0</div></div>
+        <div class="bet"       data-type="low"    data-pay="1"><div class="bt">1–18</div><div class="bp">pays 1:1</div><div class="badge">0</div></div>
+        <div class="bet"       data-type="high"   data-pay="1"><div class="bt">19–36</div><div class="bp">pays 1:1</div><div class="badge">0</div></div>
+        <div class="bet"       data-type="dozen1" data-pay="2"><div class="bt">1st 12</div><div class="bp">pays 2:1</div><div class="badge">0</div></div>
+        <div class="bet"       data-type="dozen2" data-pay="2"><div class="bt">2nd 12</div><div class="bp">pays 2:1</div><div class="badge">0</div></div>
+        <div class="bet"       data-type="dozen3" data-pay="2"><div class="bt">3rd 12</div><div class="bp">pays 2:1</div><div class="badge">0</div></div>
+        <div class="bet"       data-type="green"  data-pay="35"><div class="bt">Zero (0)</div><div class="bp">pays 35:1</div><div class="badge">0</div></div>
+      </div>
+
+      <div class="number-note">Or bet a straight number (pays 35:1):</div>
+      <div class="num-grid" id="numGrid"></div>
+
+      <div class="summary"><span>Total staked</span><b><span id="totalStake">0</span> $HOOD</b></div>
+      <div class="summary"><span>Max possible payout</span><b><span id="maxPayout">0</span> $HOOD</b></div>
+
+      <button class="btn btn-brand" id="spinBtn">Spin the wheel</button>
+
+      <div class="notice">
+        <b>Demo only.</b> This uses a free play-money $HOOD balance stored in your browser. It is not custodial, takes no deposits, and moves no real tokens — it's an entertainment &amp; provably-fair demo, not a real-money gambling product.
+      </div>
+      <div style="display:flex;justify-content:center;margin-top:14px;">
+        <button class="mini-btn" id="resetBank">Reset demo balance to 1,000</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<footer>© 2026 PonsX · $HOOD Roulette — provably-fair demo, play-money only. Not custodial, not a broker, not real-money gambling.</footer>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ---------- Roulette constants (European single-zero) ---------- */
+const WHEEL_ORDER = [0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26];
+const RED = new Set([1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]);
+const colorOf = n => n === 0 ? 'green' : (RED.has(n) ? 'red' : 'black');
+const SLICE = 360 / WHEEL_ORDER.length;
+
+/* ---------- State ---------- */
+const LS = 'hoodRoulette.v1';
+let state = loadState();
+let bets = {};            // key -> amount  (outside type or "num:N")
+let spinning = false;
+let currentRotation = 0;
+
+function loadState() {
+  try {
+    const s = JSON.parse(localStorage.getItem(LS));
+    if (s && typeof s.balance === 'number') return s;
+  } catch(e){}
+  return { balance: 1000, nonce: 0, clientSeed: randHex(8), history: [], lastSpin: null, serverSeed: null, serverHash: null };
+}
+function saveState(){ try{ localStorage.setItem(LS, JSON.stringify(state)); }catch(e){} }
+
+/* ---------- Crypto helpers (Web Crypto — real, verifiable) ---------- */
+function randHex(bytes){
+  const a = new Uint8Array(bytes); crypto.getRandomValues(a);
+  return [...a].map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+async function sha256Hex(str){
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+async function hmac256Hex(keyStr, msgStr){
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(keyStr),
+    {name:'HMAC', hash:'SHA-256'}, false, ['sign']);
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(msgStr));
+  return [...new Uint8Array(sig)].map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+async function deriveResult(serverSeed, clientSeed, nonce){
+  const h = await hmac256Hex(serverSeed, clientSeed + ':' + nonce);
+  const n = parseInt(h.slice(0,8), 16); // 32-bit unbiased enough for 0..36
+  return { number: n % 37, hmac: h };
+}
+
+/* ---------- Commit: prepare a server seed + published hash ---------- */
+async function commitNewSeed(){
+  state.serverSeed = randHex(16);
+  state.serverHash = await sha256Hex(state.serverSeed);
+  saveState();
+  document.getElementById('serverHash').textContent = state.serverHash;
+}
+
+/* ---------- Build UI ---------- */
+function buildNumbers(){
+  const grid = document.getElementById('numGrid');
+  grid.innerHTML = '';
+  for(let n=0;n<=36;n++){
+    const d = document.createElement('div');
+    d.className = 'num ' + colorOf(n);
+    d.textContent = n;
+    d.dataset.num = n;
+    d.onclick = ()=> toggleNumberBet(n, d);
+    grid.appendChild(d);
+  }
+}
+function buildWheel(){
+  const stops = WHEEL_ORDER.map((n,i)=>{
+    const col = colorOf(n)==='green' ? '#1f9d55' : colorOf(n)==='red' ? '#c0334d' : '#151022';
+    return `${col} ${i*SLICE}deg ${(i+1)*SLICE}deg`;
+  }).join(',');
+  const w = document.getElementById('wheel');
+  w.style.background = `conic-gradient(from -${SLICE/2}deg, ${stops})`;
+}
+
+/* ---------- Betting ---------- */
+function currentStake(){ return Math.max(0, Math.floor(Number(document.getElementById('stake').value)||0)); }
+
+function toggleOutsideBet(el){
+  const type = el.dataset.type;
+  const stake = currentStake();
+  if(bets[type]){ delete bets[type]; el.classList.remove('active'); }
+  else { if(stake<=0) return toast('Set a stake first'); bets[type]=stake; el.classList.add('active'); el.querySelector('.badge').textContent = stake; }
+  refreshSummary();
+}
+function toggleNumberBet(n, el){
+  const key = 'num:'+n; const stake = currentStake();
+  if(bets[key]){ delete bets[key]; el.classList.remove('active'); }
+  else { if(stake<=0) return toast('Set a stake first'); bets[key]=stake; el.classList.add('active'); }
+  refreshSummary();
+}
+function clearBets(){
+  bets = {};
+  document.querySelectorAll('.bet.active').forEach(b=>{ b.classList.remove('active'); b.querySelector('.badge').textContent='0'; });
+  document.querySelectorAll('.num.active').forEach(n=>n.classList.remove('active'));
+  refreshSummary();
+}
+function payoutFor(type){
+  if(type.startsWith('num:')) return 35;
+  return Number(document.querySelector(`.bet[data-type="${type}"]`).dataset.pay);
+}
+function refreshSummary(){
+  let total=0, maxPay=0;
+  for(const [k,amt] of Object.entries(bets)){ total+=amt; maxPay = Math.max(maxPay, amt*(payoutFor(k)+1)); }
+  document.getElementById('totalStake').textContent = total;
+  document.getElementById('maxPayout').textContent = maxPay;
+  document.getElementById('spinBtn').disabled = total<=0 || total>state.balance || spinning;
+  if(total>state.balance){ document.getElementById('spinBtn').textContent='Not enough $HOOD'; }
+  else document.getElementById('spinBtn').textContent = spinning ? 'Spinning…' : 'Spin the wheel';
+}
+
+/* ---------- Win checking ---------- */
+function betWins(type, n){
+  const c = colorOf(n);
+  switch(type){
+    case 'red': return c==='red';
+    case 'black': return c==='black';
+    case 'even': return n!==0 && n%2===0;
+    case 'odd': return n%2===1;
+    case 'low': return n>=1 && n<=18;
+    case 'high': return n>=19 && n<=36;
+    case 'dozen1': return n>=1 && n<=12;
+    case 'dozen2': return n>=13 && n<=24;
+    case 'dozen3': return n>=25 && n<=36;
+    case 'green': return n===0;
+    default:
+      if(type.startsWith('num:')) return Number(type.split(':')[1])===n;
+      return false;
+  }
+}
+
+/* ---------- Spin ---------- */
+async function spin(){
+  if(spinning) return;
+  const total = Object.values(bets).reduce((a,b)=>a+b,0);
+  if(total<=0) return toast('Place a bet first');
+  if(total>state.balance) return toast('Not enough $HOOD');
+
+  spinning = true;
+  document.getElementById('spinBtn').disabled = true;
+  document.getElementById('spinBtn').textContent = 'Spinning…';
+
+  // deduct stake now
+  state.balance -= total;
+  renderBalance();
+
+  // provably-fair draw using the ALREADY-committed server seed
+  state.nonce += 1;
+  const clientSeed = document.getElementById('clientSeed').value.trim() || 'default';
+  state.clientSeed = clientSeed;
+  const { number, hmac } = await deriveResult(state.serverSeed, clientSeed, state.nonce);
+
+  // record this spin's proof BEFORE animating (result already fixed)
+  const proof = {
+    serverSeed: state.serverSeed, serverHash: state.serverHash,
+    clientSeed, nonce: state.nonce, hmac, number
+  };
+
+  // animate wheel to the winning slice
+  const idx = WHEEL_ORDER.indexOf(number);
+  const targetAngle = idx*SLICE;                 // slice center under the top pointer
+  const extraSpins = 5 + Math.floor(Math.random()*3);
+  const base = currentRotation - (currentRotation % 360);
+  currentRotation = base + extraSpins*360 + (360 - targetAngle);
+  document.getElementById('wheel').style.transform = `rotate(${currentRotation}deg)`;
+
+  await new Promise(r=>setTimeout(r, 6300));
+
+  // settle
+  let payout = 0, anyWin=false;
+  for(const [k,amt] of Object.entries(bets)){
+    if(betWins(k, number)){ payout += amt*(payoutFor(k)+1); anyWin=true; }
+  }
+  state.balance += payout;
+
+  // reveal & rotate to a fresh committed seed for the next round
+  state.lastSpin = proof;
+  state.history.unshift(number); state.history = state.history.slice(0,18);
+  saveState();
+
+  // UI
+  document.getElementById('hubNum').textContent = number;
+  document.getElementById('hubNum').style.color =
+    colorOf(number)==='red'?'#ff8ba0':colorOf(number)==='green'?'#62e39b':'#e6e2ff';
+  const res = document.getElementById('result');
+  const net = payout - total;
+  if(anyWin){ res.className='result-line win'; res.textContent = `${number} ${colorOf(number)} — you won ${payout} $HOOD (net ${net>=0?'+':''}${net}).`; }
+  else { res.className='result-line lose'; res.textContent = `${number} ${colorOf(number)} — no win this time (−${total} $HOOD).`; }
+
+  document.getElementById('nonce').textContent = state.nonce;
+  document.getElementById('revealedSeed').textContent = proof.serverSeed;
+  renderBalance(); renderHistory();
+
+  // commit a new seed for the next spin
+  await commitNewSeed();
+
+  spinning = false;
+  refreshSummary();
+}
+
+/* ---------- Verify ---------- */
+async function verifyLast(){
+  const out = document.getElementById('verifyOut');
+  const p = state.lastSpin;
+  if(!p){ out.className='verify-out'; out.textContent='No spin to verify yet.'; return; }
+  const hashOk = (await sha256Hex(p.serverSeed)) === p.serverHash;
+  const { number, hmac } = await deriveResult(p.serverSeed, p.clientSeed, p.nonce);
+  const numOk = number === p.number && hmac === p.hmac;
+  if(hashOk && numOk){
+    out.className='verify-out ok';
+    out.textContent = `✓ Verified. SHA-256(serverSeed) matches the commit, and (${p.clientSeed}:${p.nonce}) → ${p.number}. Fair.`;
+  } else {
+    out.className='verify-out bad';
+    out.textContent = `✗ Mismatch! hash ${hashOk?'ok':'FAILED'}, number ${numOk?'ok':'FAILED'}.`;
+  }
+}
+
+/* ---------- Renders ---------- */
+function renderBalance(){ document.getElementById('balance').textContent = state.balance.toLocaleString(); }
+function renderHistory(){
+  const h = document.getElementById('history');
+  if(!state.history.length){ h.innerHTML='<span style="color:var(--text-tertiary);font-size:13px">No spins yet.</span>'; return; }
+  h.innerHTML = state.history.map(n=>`<div class="h-pill ${colorOf(n)}">${n}</div>`).join('');
+}
+
+/* ---------- Toast ---------- */
+let toastT;
+function toast(msg){
+  const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
+  clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),1900);
+}
+
+/* ---------- Wire up ---------- */
+function init(){
+  buildWheel(); buildNumbers();
+  document.getElementById('clientSeed').value = state.clientSeed;
+  document.getElementById('nonce').textContent = state.nonce;
+  if(state.lastSpin){ document.getElementById('revealedSeed').textContent = state.lastSpin.serverSeed; document.getElementById('hubNum').textContent = state.lastSpin.number; }
+  renderBalance(); renderHistory();
+
+  document.getElementById('outsideBets').querySelectorAll('.bet').forEach(b=> b.onclick=()=>toggleOutsideBet(b));
+  document.querySelectorAll('.chip-btn').forEach(c=> c.onclick=()=>{
+    const inp=document.getElementById('stake');
+    if(c.dataset.set==='max'){ inp.value=state.balance; }
+    else inp.value=(Number(inp.value)||0)+Number(c.dataset.add);
+    refreshSummary();
+  });
+  document.getElementById('clearBets').onclick = clearBets;
+  document.getElementById('stake').oninput = refreshSummary;
+  document.getElementById('spinBtn').onclick = spin;
+  document.getElementById('verifyBtn').onclick = verifyLast;
+  document.getElementById('rotateBtn').onclick = async ()=>{ await commitNewSeed(); toast('New server seed committed'); };
+  document.getElementById('resetBank').onclick = ()=>{
+    state.balance=1000; saveState(); renderBalance(); refreshSummary(); toast('Balance reset to 1,000 $HOOD');
+  };
+
+  // ensure a committed server seed exists (either restored or fresh)
+  if(state.serverSeed && state.serverHash){ document.getElementById('serverHash').textContent = state.serverHash; }
+  else commitNewSeed();
+
+  refreshSummary();
+}
+init();
+</script>
+</body>
+</html>
