@@ -346,7 +346,11 @@ nav {
  * Only ever requests the public key (connect) and read-only RPC data
  * (balance, token accounts). Never requests a transaction signature.
  */
-const RPC_ENDPOINT = 'https://api.mainnet-beta.solana.com';
+const RPC_ENDPOINTS = [
+  'https://api.mainnet-beta.solana.com',
+  'https://solana-rpc.publicnode.com',
+  'https://rpc.ankr.com/solana'
+];
 const TOKEN_PROGRAM_ID = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
 const STORAGE_KEY = 'ponsx_wallet_pubkey';
 
@@ -405,14 +409,24 @@ const PonsXWallet = {
   },
 
   async rpc(method, params) {
-    const res = await fetch(RPC_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params })
-    });
-    const json = await res.json();
-    if (json.error) throw new Error(json.error.message || 'RPC_ERROR');
-    return json.result;
+    let lastError;
+    for (const endpoint of RPC_ENDPOINTS) {
+      try {
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params })
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status} from ${endpoint}`);
+        const json = await res.json();
+        if (json.error) throw new Error(json.error.message || 'RPC_ERROR');
+        return json.result;
+      } catch (err) {
+        lastError = err;
+        console.warn(`RPC endpoint failed (${endpoint}):`, err.message || err);
+      }
+    }
+    throw lastError || new Error('All RPC endpoints failed');
   },
 
   async getSolBalance(pubkey) {
