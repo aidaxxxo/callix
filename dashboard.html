@@ -272,6 +272,79 @@ nav {
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+.scanner-note {
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+  line-height: 1.6;
+  margin-bottom: 18px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--border-glass);
+}
+
+.scanner-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--border-glass);
+  flex-wrap: wrap;
+}
+
+.scanner-row:last-child { border: none; }
+
+.scanner-left { display: flex; align-items: center; gap: 12px; min-width: 180px; }
+
+.scanner-icon {
+  width: 38px; height: 38px; border-radius: 10px;
+  background: linear-gradient(135deg, rgba(34,230,255,0.25), rgba(233,63,224,0.25));
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.scanner-icon img { width: 100%; height: 100%; object-fit: cover; }
+
+.scanner-name { font-size: 13.5px; font-weight: 700; }
+.scanner-sub { font-size: 11px; color: var(--text-tertiary); margin-top: 2px; }
+
+.scanner-price { text-align: right; min-width: 90px; }
+.scanner-price .p { font-size: 13.5px; font-weight: 700; }
+.scanner-price .chg { font-size: 11px; font-weight: 600; margin-top: 2px; }
+.scanner-price .chg.up { color: var(--accent-green); }
+.scanner-price .chg.down { color: var(--accent-red); }
+
+.scanner-holders {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 160px;
+}
+
+.scanner-holders .lbl2 { font-size: 10px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px; }
+
+.holder-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'Space Grotesk', monospace;
+  font-size: 11px;
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+
+.holder-chip:hover { color: var(--accent-cyan); }
+
+.holder-chip .pct { color: var(--text-tertiary); }
+
+.buy-btn {
+  padding: 9px 20px;
+  font-size: 12.5px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
 .overview-canvas-wrap { height: 220px; position: relative; }
 
 @media (max-width: 900px) {
@@ -334,19 +407,22 @@ nav {
 
   <div class="card panel">
     <div class="panel-head">
-      <h3>SOL — 30D Trend</h3>
-      <span class="tag">Illustrative market data</span>
-    </div>
-    <div class="overview-canvas-wrap"><canvas id="trendCanvas"></canvas></div>
-  </div>
-
-  <div class="card panel">
-    <div class="panel-head">
       <h3>Token Holdings</h3>
       <span class="tag" id="tokenTag">Live from your wallet</span>
     </div>
     <div id="tokenList">
       <div class="loading-row"><div class="mini-spinner"></div> Fetching token accounts…</div>
+    </div>
+  </div>
+
+  <div class="card panel">
+    <div class="panel-head">
+      <h3>Token Scanner</h3>
+      <span class="tag">Trending Solana tokens · live data</span>
+    </div>
+    <p class="scanner-note">Top holder wallets are read live from Solana RPC — the largest current holders of each token, not a curated "smart money" score. "Buy" opens the token on Jupiter, where you execute the swap yourself; PonsX never holds or moves funds.</p>
+    <div id="scannerList">
+      <div class="loading-row"><div class="mini-spinner"></div> Scanning trending tokens…</div>
     </div>
   </div>
 </div>
@@ -460,6 +536,21 @@ const PonsXWallet = {
       .sort((a, b) => b.amount - a.amount);
   },
 
+  async getTopHolders(mint, limit = 3) {
+    const largest = await this.rpc('getTokenLargestAccounts', [mint]);
+    const accounts = (largest.value || []).slice(0, limit);
+    if (!accounts.length) return [];
+    const addresses = accounts.map((a) => a.address);
+    const infos = await this.rpc('getMultipleAccounts', [addresses, { encoding: 'jsonParsed' }]);
+    return accounts.map((acc, i) => {
+      const parsed = infos.value?.[i]?.data?.parsed?.info;
+      return {
+        owner: parsed?.owner || null,
+        amount: acc.uiAmount
+      };
+    }).filter((h) => h.owner);
+  },
+
   truncate(pubkey) {
     if (!pubkey) return '';
     return `${pubkey.slice(0, 4)}…${pubkey.slice(-4)}`;
@@ -542,6 +633,7 @@ PonsXWallet.onAccountChange((pubkey) => {
 });
 
 window.addEventListener('DOMContentLoaded', async () => {
+  loadTokenScanner();
   const stored = PonsXWallet.getStoredPubkey();
   if (stored && PonsXWallet.isInstalled()) {
     try {
@@ -553,51 +645,110 @@ window.addEventListener('DOMContentLoaded', async () => {
   showGate();
 });
 
-// ---- Illustrative trend chart (demo data, clearly labeled) ----
-(function() {
-  const canvas = document.getElementById('trendCanvas');
-  const ctx = canvas.getContext('2d');
-  const parent = canvas.parentElement;
-  function resize() { canvas.width = parent.offsetWidth; canvas.height = parent.offsetHeight || 220; }
-  resize();
-  window.addEventListener('resize', resize);
+// ---- Token Scanner: real trending Solana tokens + real on-chain top holders ----
+const scannerListEl = document.getElementById('scannerList');
 
-  const points = [];
-  let v = 140;
-  for (let i = 0; i < 60; i++) {
-    v += (Math.random() - 0.47) * 6;
-    points.push(v);
+function jupiterBuyUrl(mint) {
+  return `https://jup.ag/swap/SOL-${mint}`;
+}
+
+function solscanUrl(address) {
+  return `https://solscan.io/account/${address}`;
+}
+
+async function fetchTrendingSolanaTokens(limit = 6) {
+  const res = await fetch('https://api.dexscreener.com/token-boosts/top/v1');
+  if (!res.ok) throw new Error(`DexScreener HTTP ${res.status}`);
+  const boosts = await res.json();
+  const solanaMints = (Array.isArray(boosts) ? boosts : [])
+    .filter((b) => b.chainId === 'solana')
+    .map((b) => b.tokenAddress)
+    .filter((v, i, arr) => arr.indexOf(v) === i)
+    .slice(0, limit);
+
+  const tokens = [];
+  for (const mint of solanaMints) {
+    try {
+      const pairRes = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${mint}`);
+      if (!pairRes.ok) continue;
+      const data = await pairRes.json();
+      const pairs = (data.pairs || []).filter((p) => p.chainId === 'solana');
+      if (!pairs.length) continue;
+      const best = pairs.sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
+      tokens.push({
+        mint,
+        symbol: best.baseToken?.symbol || '???',
+        name: best.baseToken?.name || 'Unknown token',
+        icon: best.info?.imageUrl || null,
+        priceUsd: parseFloat(best.priceUsd) || 0,
+        change24h: best.priceChange?.h24 ?? null
+      });
+    } catch (_) { /* skip token on fetch failure */ }
   }
+  return tokens;
+}
 
-  function draw() {
-    const w = canvas.width, h = canvas.height;
-    ctx.clearRect(0, 0, w, h);
-    const min = Math.min(...points) - 5, max = Math.max(...points) + 5;
-    const mapX = (i) => (i / (points.length - 1)) * w;
-    const mapY = (val) => h - ((val - min) / (max - min)) * h;
+function renderScannerRow(token) {
+  const up = (token.change24h ?? 0) >= 0;
+  const iconHtml = token.icon
+    ? `<img src="${token.icon}" alt="${token.symbol}">`
+    : token.symbol.slice(0, 2).toUpperCase();
+  return `
+    <div class="scanner-row" data-mint="${token.mint}">
+      <div class="scanner-left">
+        <div class="scanner-icon">${iconHtml}</div>
+        <div>
+          <div class="scanner-name">${token.symbol}</div>
+          <div class="scanner-sub">${token.name}</div>
+        </div>
+      </div>
+      <div class="scanner-price">
+        <div class="p">$${token.priceUsd < 0.01 ? token.priceUsd.toExponential(2) : token.priceUsd.toLocaleString(undefined, {maximumFractionDigits: 4})}</div>
+        <div class="chg ${up ? 'up' : 'down'}">${token.change24h == null ? '—' : (up ? '+' : '') + token.change24h.toFixed(1) + '%'}</div>
+      </div>
+      <div class="scanner-holders" data-holders="${token.mint}">
+        <div class="lbl2">Top Holders</div>
+        <div class="loading-row" style="padding:0"><div class="mini-spinner"></div></div>
+      </div>
+      <a class="btn btn-brand buy-btn" href="${jupiterBuyUrl(token.mint)}" target="_blank" rel="noopener">Buy on Jupiter →</a>
+    </div>
+  `;
+}
 
-    const grad = ctx.createLinearGradient(0, 0, 0, h);
-    grad.addColorStop(0, 'rgba(34,230,255,0.18)');
-    grad.addColorStop(1, 'transparent');
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.moveTo(0, h);
-    points.forEach((p, i) => ctx.lineTo(mapX(i), mapY(p)));
-    ctx.lineTo(w, h);
-    ctx.closePath();
-    ctx.fill();
-
-    const lineGrad = ctx.createLinearGradient(0, 0, w, 0);
-    lineGrad.addColorStop(0, '#22e6ff');
-    lineGrad.addColorStop(1, '#e93fe0');
-    ctx.strokeStyle = lineGrad;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    points.forEach((p, i) => { if (i === 0) ctx.moveTo(mapX(i), mapY(p)); else ctx.lineTo(mapX(i), mapY(p)); });
-    ctx.stroke();
+async function loadHoldersFor(mint) {
+  const slot = document.querySelector(`[data-holders="${mint}"]`);
+  if (!slot) return;
+  try {
+    const holders = await PonsXWallet.getTopHolders(mint, 3);
+    if (!holders.length) {
+      slot.innerHTML = '<div class="lbl2">Top Holders</div><span style="font-size:11px;color:var(--text-tertiary)">Unavailable</span>';
+      return;
+    }
+    slot.innerHTML = '<div class="lbl2">Top Holders</div>' + holders.map((h) => `
+      <a class="holder-chip" href="${solscanUrl(h.owner)}" target="_blank" rel="noopener">
+        ${PonsXWallet.truncate(h.owner)} <span class="pct">${h.amount ? h.amount.toLocaleString(undefined, {maximumFractionDigits: 0}) : ''}</span>
+      </a>
+    `).join('');
+  } catch (e) {
+    console.warn(`Holder lookup failed for ${mint}:`, e.message || e);
+    slot.innerHTML = '<div class="lbl2">Top Holders</div><span style="font-size:11px;color:var(--text-tertiary)">Unavailable</span>';
   }
-  draw();
-})();
+}
+
+async function loadTokenScanner() {
+  try {
+    const tokens = await fetchTrendingSolanaTokens(6);
+    if (!tokens.length) {
+      scannerListEl.innerHTML = '<div class="empty-state">No trending Solana tokens returned right now.</div>';
+      return;
+    }
+    scannerListEl.innerHTML = tokens.map(renderScannerRow).join('');
+    tokens.forEach((t) => loadHoldersFor(t.mint));
+  } catch (e) {
+    console.error('Token scanner failed:', e);
+    scannerListEl.innerHTML = `<div class="empty-state">Could not load trending tokens: ${e.message || 'unknown error'}</div>`;
+  }
+}
 </script>
 </body>
 </html>
